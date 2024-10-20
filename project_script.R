@@ -7,6 +7,9 @@ library("cowplot")    # For combining plots
 library("vegan")      # For rarefaction
 library("ggplot2")
 library("reshape2")
+library("dplyr")
+library("tidyr")
+library("MicrobiomeStat")
 
 
 # ==========================================
@@ -167,12 +170,15 @@ ggsave(
   height = 8, 
   dpi = 300
 )
+
+
 # ==========================================
-#7. ALPHA DIVERSITY
+# 7. ALPHA DIVERSITY
 # ==========================================
 
 #Variable with the alpha diversity indexes to generate
 alpha_ind <- c("Observed", "Shannon", "Fisher", "Simpson", "InvSimpson")
+
 #Generate Alpha diversity
 alpha_tab <- estimate_richness(phyloseq_obj, 
                                measures = alpha_ind)
@@ -180,12 +186,13 @@ alpha_tab <- estimate_richness(phyloseq_obj,
 # Variable with the column names to add from the metadata
 cols_to_add_alpha <- c("habitat_class", "Run", "host_color")
 
-#Turn metadata into a data frame
+# Turn metadata into a data frame
 metadata_df <- data.frame(metadata)
 
 # Combine alpha diversity results with metadata
 alpha_tab_comb <- bind_cols(alpha_tab, metadata_df[cols_to_add_alpha])
 head(alpha_tab_comb)
+
 
 # Loop over each alpha diversity index BY COLOR
 for (alpha in alpha_ind) {
@@ -197,6 +204,7 @@ for (alpha in alpha_ind) {
   cat("\nKruskal-Wallis test for", alpha, "grouped by host_color:\n")
   print(kruskal_test_results)
 }
+
 
 # Loop over each alpha diversity index BY HABITAT
 for (alpha in alpha_ind) {
@@ -211,115 +219,219 @@ for (alpha in alpha_ind) {
 
 
 #=========================================
-#8. VISUALZATION OF ALPHA DIVERSITY
+# 8. VISUALZATION OF ALPHA DIVERSITY
 #=========================================
-#Pivot data to use in plots
+
+# Pivot data to use in plots
 alpha_tab_comb_long <- pivot_longer(data = alpha_tab_comb, 
                                     cols = alpha_ind, 
                                     names_to = "Index", 
                                     values_to = "Value")
 
-#Violin Plot for all alpha diversities grouped by color
-ggplot(data = alpha_tab_comb_long, 
-       mapping = aes(x = host_color, 
-                     y = Value)) + 
+# Violin plot for all alpha diversities grouped by color
+alpha_diversity_color_plot <- ggplot(data = alpha_tab_comb_long, 
+                                     aes(x = host_color, 
+                                         y = Value,
+                                         fill = host_color)) + 
   geom_jitter(height = 0, 
               width = 0.25, 
               alpha = 0.75, 
-              colour = "steelblue") +
-  geom_violin(fill = NA) + 
+              aes(color = host_color)) +
+  geom_violin(trim = FALSE, 
+              alpha = 0.5, 
+              aes(color = host_color)) +
   facet_wrap("Index", scales = "free") + 
-  theme_bw() +
-  theme(strip.text = element_text(size = 5))
+  theme_light() +
+  labs(x = "Host Color", 
+       title = "Alpha Diversity by Host Color") +
+  theme(strip.text = element_text(size = 10),
+        axis.text.x = element_text(angle = 90,
+                                   hjust = 1,
+                                   vjust = 0.5,
+                                   size = 9),
+        legend.position = "none",
+        plot.title = element_text(hjust = 0.5, 
+                                  face = "bold"),
+        axis.title = element_text(face = "bold"))
 
+# Display plot
+alpha_diversity_color_plot
 
+# Save plot
+ggsave("alpha_diversity_color_plot.png",
+       plot = alpha_diversity_color_plot,
+       width = 12,
+       height = 8,
+       units = "in",
+       dpi = 300)
 
-#Violin Plot for all alpha diversities grouped by habitat
-ggplot(data = alpha_tab_comb_long, 
-       mapping = aes(x = habitat_class, 
-                     y = Value)) + 
+# Violin plot for all alpha diversities grouped by habitat
+alpha_diversity_habitat_plot <- ggplot(data = alpha_tab_comb_long, 
+                                       aes(x = habitat_class, 
+                                           y = Value, 
+                                           fill = habitat_class)) + 
   geom_jitter(height = 0, 
               width = 0.25, 
               alpha = 0.75, 
-              colour = "steelblue") +
-  geom_violin(fill = NA) + 
+              aes(color = habitat_class)) +
+  geom_violin(trim = FALSE, 
+              alpha = 0.5, 
+              aes(color = habitat_class)) +
   facet_wrap("Index", scales = "free") + 
-  theme_bw() +
-  theme(strip.text = element_text(size = 5))
+  theme_light() +
+  labs(x = "Habitat Class", 
+       title = "Alpha Diversity by Habitat Class") +
+  theme(strip.text = element_text(size = 10),
+        axis.text.x = element_text(angle = 90,
+                                   hjust = 1,
+                                   vjust = 0.5,
+                                   size = 9),
+        legend.position = "none",
+        plot.title = element_text(hjust = 0.5, 
+                                  face = "bold"),
+        axis.title = element_text(face = "bold"))
+
+# Display plot
+alpha_diversity_habitat_plot
+
+# Save plot
+ggsave("alpha_diversity_habitat_plot.png",
+       plot = alpha_diversity_habitat_plot,
+       width = 12,
+       height = 8,
+       units = "in",
+       dpi = 300)
+
 
 #=========================================
-#9.BETA DIVERSITY
+# 9.BETA DIVERSITY
 #=========================================
 
-#Distance matrix using Jaccard method
-jacc_dist <- distance(physeq = phyloseq_obj_prop_genus, 
-                      method = "jaccard", binary = TRUE)
+# Subset the phyloseq object to include only Black squirrels
+black_squirrels <- subset_samples(phyloseq_obj, host_color == "Black")
 
-#Distance matrix using Bray method
-bray_dist <- distance(physeq = phyloseq_obj_prop_genus, 
-                      method = "bray")
+# Subset the phyloseq object to include only Grey squirrels
+grey_squirrels <- subset_samples(phyloseq_obj, host_color == "Grey")
 
-#ordinance for Jacc method
-jacc_ord <- ordinate(physeq = phyloseq_obj_prop_genus, 
-                     method = "MDS", 
-                     distance = jacc_dist)
+# Subset the phyloseq object to include only Intermediate squirrels
+intermediate_squirrels <- subset_samples(phyloseq_obj, host_color == "Intermediate")
 
-#Ordinate for bray method
-bary_ord <- ordinate(physeq = phyloseq_obj_prop_genus, 
-                     method = "MDS", 
-                     distance = bray_dist, 
-                     binary = TRUE)
 
-#=========================================
-#10 STATISTICAL ANALYSIS FOR BETA DIVERSITY
-#=========================================
-#PERMANOVA tests grouped by different factors(color, habitat, and enviroment) on the Jacc method
-adonis2(jacc_dist ~ host_color, data = metadata_df, permutations = 999)
-adonis2(jacc_dist ~ local_environment, data = metadata_df, permutations = 999)
-adonis2(jacc_dist ~ habitat_class, data = metadata_df, permutations = 999)
+# Distance matrix using Jaccard method
+jacc_dist_black <- distance(black_squirrels, method = "jaccard", binary = TRUE)
+jacc_dist_grey <- distance(grey_squirrels, method = "jaccard", binary = TRUE)
+jacc_dist_intermediate <- distance(intermediate_squirrels, method = "jaccard", binary = TRUE)
 
-#PERMANOVA tests grouped by different factors(color, habitat, and enviroment) on the Bray method
-adonis2(bray_dist ~ host_color, data = metadata_df, permutations = 999)
-adonis2(bray_dist ~ local_environment, data = metadata_df, permutations = 999)
-adonis2(bray_dist ~ habitat_class, data = metadata_df, permutations = 999)
+# Distance matrix using Bray-Curtis method
+bray_dist_black <- distance(black_squirrels, method = "bray")
+bray_dist_grey <- distance(grey_squirrels, method = "bray")
+bray_dist_intermediate <- distance(intermediate_squirrels, method = "bray")
 
-#=========================================
-#11 VISUALIZATIO OF BETA DIVERSITY
-#=========================================
 
-#PCoA plot in jacc method
-jacc_plot <- plot_ordination(physeq = phyloseq_obj_prop_genus, 
-                             ordination = jacc_ord, 
-                             color = "host_color", 
-                             shape = "local_environment") + 
+# Ordination using Jaccard method
+jacc_ord_black <- ordinate(black_squirrels, method = "MDS", distance = jacc_dist_black)
+jacc_ord_grey <- ordinate(grey_squirrels, method = "MDS", distance = jacc_dist_grey)
+jacc_ord_intermediate <- ordinate(intermediate_squirrels, method = "MDS", distance = jacc_dist_intermediate)
+
+# Ordination using Bray-Curtis method
+bray_ord_black <- ordinate(black_squirrels, method = "MDS", distance = bray_dist_black)
+bray_ord_grey <- ordinate(grey_squirrels, method = "MDS", distance = bray_dist_grey)
+bray_ord_intermediate <- ordinate(intermediate_squirrels, method = "MDS", distance = bray_dist_intermediate)
+
+
+# Jaccard plot for Black squirrels
+jacc_plot_black <- plot_ordination(black_squirrels, jacc_ord_black, color = "habitat_class") +
   theme_classic() +
-  stat_ellipse(alpha = 0.25)
+  stat_ellipse(alpha = 0.25) +
+  ggtitle("Jaccard - Black Squirrels") +
+  labs(color = "Habitat Class") +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 14),
+    legend.title = element_text(face = "bold"),
+    legend.position = "right"
+  )
 
-#PCoA plot in bray method
-bray_plot <- plot_ordination(physeq = phyloseq_obj_prop_genus, 
-                             ordination = bary_ord, 
-                             color = "local_environment", 
-                             shape = "host_color") + 
+# Jaccard plot for Grey squirrels
+jacc_plot_grey <- plot_ordination(grey_squirrels, jacc_ord_grey, color = "habitat_class") +
   theme_classic() +
-  stat_ellipse(alpha = 0.25)
+  stat_ellipse(alpha = 0.25) +
+  ggtitle("Jaccard - Grey Squirrels") +
+  labs(color = "Habitat Class") +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 14),
+    legend.title = element_text(face = "bold"),
+    legend.position = "right"
+  )
 
-#Save plots
-ggsave(
-  filename = "beta_diversity_plot_Jacc.png", 
-  plot = jacc_plot, 
-  width = 10, 
-  height = 8, 
-  dpi = 300
-)
-#Save plots
-ggsave(
-  filename = "beta_diversity_plot_Bray.png", 
-  plot = bray_plot, 
-  width = 10, 
-  height = 8, 
-  dpi = 300
-)
+# Jaccard plot for Intermediate squirrels
+jacc_plot_intermediate <- plot_ordination(intermediate_squirrels, jacc_ord_intermediate, color = "habitat_class") +
+  theme_classic() +
+  stat_ellipse(alpha = 0.25) +
+  ggtitle("Jaccard - Intermediate Squirrels") +
+  labs(color = "Habitat Class") +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 14),
+    legend.title = element_text(face = "bold"),
+    legend.position = "right"
+  )
 
-# ===================================================
-#12.
-#====================================================
+# Bray-Curtis plot for Black squirrels
+bray_plot_black <- plot_ordination(black_squirrels, bray_ord_black, color = "habitat_class") +
+  theme_classic() +
+  stat_ellipse(alpha = 0.25) +
+  ggtitle("Bray-Curtis - Black Squirrels") +
+  labs(color = "Habitat Class") +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 14),
+    legend.title = element_text(face = "bold"),
+    legend.position = "right"
+  )
+
+# Bray-Curtis plot for Grey squirrels
+bray_plot_grey <- plot_ordination(grey_squirrels, bray_ord_grey, color = "habitat_class") +
+  theme_classic() +
+  stat_ellipse(alpha = 0.25) +
+  ggtitle("Bray-Curtis - Grey Squirrels") +
+  labs(color = "Habitat Class") +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 14),
+    legend.title = element_text(face = "bold"),
+    legend.position = "right"
+  )
+
+# Bray-Curtis plot for Intermediate squirrels
+bray_plot_intermediate <- plot_ordination(intermediate_squirrels, bray_ord_intermediate, color = "habitat_class") +
+  theme_classic() +
+  stat_ellipse(alpha = 0.25) +
+  ggtitle("Bray-Curtis - Intermediate Squirrels") +
+  labs(color = "Habitat Class") +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 14),
+    legend.title = element_text(face = "bold"),
+    legend.position = "right"
+  )
+
+
+# Combine Jaccard plots
+combined_jacc_plot <- plot_grid(jacc_plot_black, jacc_plot_grey, jacc_plot_intermediate, 
+                                ncol = 1, align = "v", labels = c("A", "B", "C"))
+
+# Combine Bray-Curtis plots
+combined_bray_plot <- plot_grid(bray_plot_black, bray_plot_grey, bray_plot_intermediate, 
+                                ncol = 1, align = "v", labels = c("A", "B", "C"))
+
+
+# Save combined Jaccard plot
+ggsave(filename = "combined_jacc_plot.png", plot = combined_jacc_plot, width = 10, height = 12, dpi = 300)
+
+# Save combined Bray-Curtis plot
+ggsave(filename = "combined_bray_plot.png", plot = combined_bray_plot, width = 10, height = 12, dpi = 300)
+
+
+#=========================================
+# 10.DIFFERENTIAL ABUNDANCE
+#=========================================
+
+# Convert as data frame
+otu_table <- as.data.frame(otu_table(phyloseq_obj))
+metadata <- as.data.frame(sample_data(phyloseq_obj))
