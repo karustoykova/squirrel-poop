@@ -167,3 +167,159 @@ ggsave(
   height = 8, 
   dpi = 300
 )
+# ==========================================
+#7. ALPHA DIVERSITY
+# ==========================================
+
+#Variable with the alpha diversity indexes to generate
+alpha_ind <- c("Observed", "Shannon", "Fisher", "Simpson", "InvSimpson")
+#Generate Alpha diversity
+alpha_tab <- estimate_richness(phyloseq_obj, 
+                               measures = alpha_ind)
+
+# Variable with the column names to add from the metadata
+cols_to_add_alpha <- c("habitat_class", "Run", "host_color")
+
+#Turn metadata into a data frame
+metadata_df <- data.frame(metadata)
+
+# Combine alpha diversity results with metadata
+alpha_tab_comb <- bind_cols(alpha_tab, metadata_df[cols_to_add_alpha])
+head(alpha_tab_comb)
+
+# Loop over each alpha diversity index BY COLOR
+for (alpha in alpha_ind) {
+  
+  # Perform the Kruskal-Wallis test for the current alpha diversity index
+  kruskal_test_results <- kruskal.test(reformulate("host_color", response = alpha), data = alpha_tab_comb)
+  
+  # Print the results
+  cat("\nKruskal-Wallis test for", alpha, "grouped by host_color:\n")
+  print(kruskal_test_results)
+}
+
+# Loop over each alpha diversity index BY HABITAT
+for (alpha in alpha_ind) {
+  
+  # Perform the Kruskal-Wallis test for the current alpha diversity index
+  kruskal_test_results <- kruskal.test(reformulate("habitat_class", response = alpha), data = alpha_tab_comb)
+  
+  # Print the results
+  cat("\nKruskal-Wallis test for", alpha, "grouped by habitat class:\n")
+  print(kruskal_test_results)
+}
+
+
+#=========================================
+#8. VISUALZATION OF ALPHA DIVERSITY
+#=========================================
+#Pivot data to use in plots
+alpha_tab_comb_long <- pivot_longer(data = alpha_tab_comb, 
+                                    cols = alpha_ind, 
+                                    names_to = "Index", 
+                                    values_to = "Value")
+
+#Violin Plot for all alpha diversities grouped by color
+ggplot(data = alpha_tab_comb_long, 
+       mapping = aes(x = host_color, 
+                     y = Value)) + 
+  geom_jitter(height = 0, 
+              width = 0.25, 
+              alpha = 0.75, 
+              colour = "steelblue") +
+  geom_violin(fill = NA) + 
+  facet_wrap("Index", scales = "free") + 
+  theme_bw() +
+  theme(strip.text = element_text(size = 5))
+
+
+
+#Violin Plot for all alpha diversities grouped by habitat
+ggplot(data = alpha_tab_comb_long, 
+       mapping = aes(x = habitat_class, 
+                     y = Value)) + 
+  geom_jitter(height = 0, 
+              width = 0.25, 
+              alpha = 0.75, 
+              colour = "steelblue") +
+  geom_violin(fill = NA) + 
+  facet_wrap("Index", scales = "free") + 
+  theme_bw() +
+  theme(strip.text = element_text(size = 5))
+
+#=========================================
+#9.BETA DIVERSITY
+#=========================================
+
+#Distance matrix using Jaccard method
+jacc_dist <- distance(physeq = phyloseq_obj_prop_genus, 
+                      method = "jaccard", binary = TRUE)
+
+#Distance matrix using Bray method
+bray_dist <- distance(physeq = phyloseq_obj_prop_genus, 
+                      method = "bray")
+
+#ordinance for Jacc method
+jacc_ord <- ordinate(physeq = phyloseq_obj_prop_genus, 
+                     method = "MDS", 
+                     distance = jacc_dist)
+
+#Ordinate for bray method
+bary_ord <- ordinate(physeq = phyloseq_obj_prop_genus, 
+                     method = "MDS", 
+                     distance = bray_dist, 
+                     binary = TRUE)
+
+#=========================================
+#10 STATISTICAL ANALYSIS FOR BETA DIVERSITY
+#=========================================
+#PERMANOVA tests grouped by different factors(color, habitat, and enviroment) on the Jacc method
+adonis2(jacc_dist ~ host_color, data = metadata_df, permutations = 999)
+adonis2(jacc_dist ~ local_environment, data = metadata_df, permutations = 999)
+adonis2(jacc_dist ~ habitat_class, data = metadata_df, permutations = 999)
+
+#PERMANOVA tests grouped by different factors(color, habitat, and enviroment) on the Bray method
+adonis2(bray_dist ~ host_color, data = metadata_df, permutations = 999)
+adonis2(bray_dist ~ local_environment, data = metadata_df, permutations = 999)
+adonis2(bray_dist ~ habitat_class, data = metadata_df, permutations = 999)
+
+#=========================================
+#11 VISUALIZATIO OF BETA DIVERSITY
+#=========================================
+
+#PCoA plot in jacc method
+jacc_plot <- plot_ordination(physeq = phyloseq_obj_prop_genus, 
+                             ordination = jacc_ord, 
+                             color = "host_color", 
+                             shape = "local_environment") + 
+  theme_classic() +
+  stat_ellipse(alpha = 0.25)
+
+#PCoA plot in bray method
+bray_plot <- plot_ordination(physeq = phyloseq_obj_prop_genus, 
+                             ordination = bary_ord, 
+                             color = "local_environment", 
+                             shape = "host_color") + 
+  theme_classic() +
+  stat_ellipse(alpha = 0.25)
+
+#Save plots
+ggsave(
+  filename = "beta_diversity_plot_Jacc.png", 
+  plot = jacc_plot, 
+  width = 10, 
+  height = 8, 
+  dpi = 300
+)
+#Save plots
+ggsave(
+  filename = "beta_diversity_plot_Bray.png", 
+  plot = bray_plot, 
+  width = 10, 
+  height = 8, 
+  dpi = 300
+)
+
+# ===================================================
+#12.
+#====================================================
