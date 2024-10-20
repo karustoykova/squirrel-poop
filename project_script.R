@@ -177,7 +177,7 @@ ggsave(
 # ==========================================
 
 #Variable with the alpha diversity indexes to generate
-alpha_ind <- c("Observed", "Shannon", "Fisher", "Simpson", "InvSimpson")
+alpha_ind <- c("Observed", "Shannon", "Fisher", "Simpson", "Chao1")
 
 #Generate Alpha diversity
 alpha_tab <- estimate_richness(phyloseq_obj, 
