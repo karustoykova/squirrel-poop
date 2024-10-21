@@ -482,7 +482,7 @@ final_results$Significant <- final_results$`Adjusted P-Value` < 0.05
 
 
 # Save the final results to a Excel file (for better readability)
-# write_xlsx(final_results, "differential_abundance_results.xlsx")
+write_xlsx(final_results, "differential_abundance_results.xlsx")
 
 
 # Define the y-axis limit
