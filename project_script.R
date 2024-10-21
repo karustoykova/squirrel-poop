@@ -491,7 +491,7 @@ y_limit <- 5
 # Volcano plot with labels only for significant genera
 volcano_plot <- ggplot(final_results, aes(x = Log2FC, y = NegLog10P, color = `Mean Abundance`)) +
   geom_point(aes(shape = Significant), alpha = 0.7, size = 4) +
-  geom_label_repel(data = final_results_filtered %>% filter(Significant == TRUE), 
+  geom_label_repel(data = final_results %>% filter(Significant == TRUE), 
                    aes(label = Variable), 
                    size = 3, 
                    show.legend = FALSE,
