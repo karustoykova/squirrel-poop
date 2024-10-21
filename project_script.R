@@ -2,14 +2,16 @@
 # 1. LOAD LIBRARIES
 # ==========================================
 
-library("phyloseq")   # For microbiome data analysis
-library("cowplot")    # For combining plots
-library("vegan")      # For rarefaction
-library("ggplot2")
-library("reshape2")
-library("dplyr")
-library("tidyr")
-library("MicrobiomeStat")
+library("phyloseq")         # For microbiome data analysis
+library("cowplot")          # For combining plots
+library("vegan")            # For rarefaction
+library("ggplot2")          # For visualization
+library("reshape2")         # For reshaping data between wide and long formats
+library("dplyr")            # For data manipulation
+library("tidyr")            # For tidying data
+library("ggrepel")          # For adding labels to ggplot2 plots
+library("MicrobiomeStat")   # For statistical analysis of microbiome data
+library("writexl")          # For writing data frames to Excel files
 
 
 # ==========================================
@@ -432,6 +434,84 @@ ggsave(filename = "combined_bray_plot.png", plot = combined_bray_plot, width = 1
 # 10.DIFFERENTIAL ABUNDANCE
 #=========================================
 
-# Convert as data frame
-otu_table <- as.data.frame(otu_table(phyloseq_obj))
-metadata <- as.data.frame(sample_data(phyloseq_obj))
+# Check if host_color and habitat_class exist
+print(colnames(mstat_obj$meta.dat))
+
+# Create interaction variable in meta.dat
+mstat_obj$meta.dat$host_habitat <- interaction(mstat_obj$meta.dat$host_color, 
+                                               mstat_obj$meta.dat$habitat_class)
+
+# Perform differential abundance analysis
+test_results <- generate_taxa_test_single(
+  data.obj = mstat_obj,
+  group.var = "host_habitat",
+  adj.vars = "habitat_class",
+  feature.dat.type = "count",
+  feature.level = c("Genus"),
+  prev.filter = 0.1,
+  abund.filter = 0.0001
+)
+
+# Clean and format the test results for visualization
+formatted_results <- lapply(test_results$Genus, function(x) {
+  x[c("Coefficient", "SE", "P.Value", "Adjusted.P.Value", "Mean.Abundance", "Prevalence")] <- 
+    round(x[c("Coefficient", "SE", "P.Value", "Adjusted.P.Value", "Mean.Abundance", "Prevalence")], 3)
+  
+  colnames(x) <- c("Variable", "Coefficient", "Standard Error", "P-Value", "Adjusted P-Value", "Mean Abundance", "Prevalence")
+  return(x)
+})
+
+# Combine into a data frame
+final_results <- do.call(rbind, formatted_results)
+
+# Ensure P.Value is numeric
+final_results$P.Value <- as.numeric(as.character(final_results$`P-Value`))
+
+# Calculate log2 fold change and -log10(p-value)
+final_results$Log2FC <- log2(final_results$Coefficient)
+final_results$NegLog10P <- -log10(final_results$P.Value)
+
+# Determine significance
+final_results$Significant <- final_results$`Adjusted P-Value` < 0.05
+
+
+# Save the final results to a Excel file (for better readability)
+write_xlsx(final_results, "differential_abundance_results.xlsx")
+
+
+# Define the y-axis limit
+y_limit <- 5
+
+# Volcano plot with labels only for significant genera
+volcano_plot <- ggplot(final_results_filtered, aes(x = Log2FC, y = NegLog10P, color = `Mean Abundance`)) +
+  geom_point(aes(shape = Significant), alpha = 0.7, size = 4) +
+  geom_label_repel(data = final_results_filtered %>% filter(Significant == TRUE), 
+                   aes(label = Variable), 
+                   size = 3, 
+                   show.legend = FALSE,
+                   segment.color = 'grey50',
+                   nudge_x = 0.1,
+                   direction = 'both',
+                   box.padding = 0.5,
+                   max.overlaps = Inf) +  # Allow unlimited overlaps
+  scale_color_gradientn(colors = c("#36004d", "#27517b", "#20727b", "#209473", "#fce51e"), 
+                        name = "Mean Abundance") +  # Gradient scale for abundance
+  labs(title = "Volcano Plot of Differential Abundance",
+       x = "Log2 Fold Change",
+       y = "-Log10 P-Value") +
+  coord_cartesian(ylim = c(0, y_limit)) +
+  theme_minimal() +
+  theme(axis.title.x = element_text(face = "bold"),
+        axis.title.y = element_text(face = "bold"),
+        plot.title = element_text(hjust = 0.5, face = "bold"),  # Make the title bold
+        legend.position = "top")
+
+# Print the volcano plot
+print(volcano_plot)
+
+# Save the volcano plot
+ggsave("volcano_plot_differential_abundance.png", 
+       plot = volcano_plot, 
+       width = 10, 
+       height = 6, 
+       dpi = 300)
