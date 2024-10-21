@@ -434,6 +434,12 @@ ggsave(filename = "combined_bray_plot.png", plot = combined_bray_plot, width = 1
 # 10.DIFFERENTIAL ABUNDANCE
 #=========================================
 
+# Transpose the OTU table if taxa are not rows
+t_phyloseq_obj <- phyloseq::t(phyloseq_obj)
+
+# Convert phyloseq object to mstat objects
+mstat_obj <- mStat_convert_phyloseq_to_data_obj(t_phyloseq_obj)
+
 # Check if host_color and habitat_class exist
 print(colnames(mstat_obj$meta.dat))
 
@@ -476,14 +482,14 @@ final_results$Significant <- final_results$`Adjusted P-Value` < 0.05
 
 
 # Save the final results to a Excel file (for better readability)
-write_xlsx(final_results, "differential_abundance_results.xlsx")
+# write_xlsx(final_results, "differential_abundance_results.xlsx")
 
 
 # Define the y-axis limit
 y_limit <- 5
 
 # Volcano plot with labels only for significant genera
-volcano_plot <- ggplot(final_results_filtered, aes(x = Log2FC, y = NegLog10P, color = `Mean Abundance`)) +
+volcano_plot <- ggplot(final_results, aes(x = Log2FC, y = NegLog10P, color = `Mean Abundance`)) +
   geom_point(aes(shape = Significant), alpha = 0.7, size = 4) +
   geom_label_repel(data = final_results_filtered %>% filter(Significant == TRUE), 
                    aes(label = Variable), 
